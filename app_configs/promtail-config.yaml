@@ -1,0 +1,158 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+- job_name: atm-application
+  static_configs:
+    - targets:
+        - localhost
+      labels:
+        job: atm-application
+        __path__: /var/log/log-examples/atm_application_logs_flat.json
+  pipeline_stages:
+    - json:
+        expressions:
+          ts: timestamp
+          level: log_level
+          atm: atm_id
+          component: component
+          msg: message
+          event_type: event_type
+    - timestamp:
+        source: ts
+        format: RFC3339
+    - labels:
+        level:
+        atm:
+        component:
+        event_type:
+    - output:
+        source: msg
+- job_name: atm-hardware-sensor
+  static_configs:
+    - targets:
+        - localhost
+      labels:
+        job: atm-hardware-sensor
+        __path__: /var/log/log-examples/atm_hardware_sensor_log_flat.json
+  pipeline_stages:
+    - json:
+        expressions:
+          ts: timestamp
+          severity: severity
+          atm: atm_id
+          component: component
+          msg: message
+          event_type: event_type
+    - timestamp:
+        source: ts
+        format: RFC3339
+    - labels:
+        severity:
+        atm:
+        component:
+        event_type:
+    - output:
+        source: msg
+- job_name: kafka-atm-metrics-stream
+  static_configs:
+    - targets:
+        - localhost
+      labels:
+        job: kafka-atm-metrics-stream
+        __path__: /var/log/log-examples/kafka_atm_metrics_stream_flat.json
+  pipeline_stages:
+    - json:
+        expressions:
+          ts: timestamp
+          atm_status: atm_status
+          atm: atm_id
+          correlation_id: correlation_id
+          transaction_failure_reason: transaction_failure_reason
+          _anomaly: _anomaly
+    - timestamp:
+        source: ts
+        format: RFC3339
+    - labels:
+        atm_status:
+        atm:
+        correlation_id:
+        _anomaly:
+        transaction_failure_reason:
+    - output:
+        source: transaction_failure_reason
+- job_name: terminal-handler-app-log
+  static_configs:
+    - targets:
+        - localhost
+      labels:
+        job: terminal-handler-app-log
+        __path__: /var/log/log-examples/terminal_handler_app_log_flat.json
+  pipeline_stages:
+    - json:
+        expressions:
+          ts: timestamp
+          log_level: log_level
+          atm: atm_id
+          correlation_id: correlation_id
+          msg: message
+          _anomaly: _anomaly
+    - timestamp:
+        source: ts
+        format: RFC3339
+    - labels:
+        log_level:
+        atm:
+        correlation_id:
+        _anomaly:
+    - output:
+        source: msg
+- job_name: anomalies-from-app-py
+  static_configs:
+    - targets:
+        - localhost
+      labels:
+        job: anomalies-from-app-py
+        __path__: /logs/anomalies/anomalies.jsonl
+  pipeline_stages:
+    - json:
+        expressions:
+          extracted_ts: timestamp
+          anomaly_type: detected_anomaly
+    - timestamp:
+        source: extracted_ts
+        format: "2006-01-02T15:04:05Z"
+    - labels:
+        anomaly_type:
+  # pipeline_stages:
+  #   - json:
+  #       expressions:
+  #         extracted_ts: timestamp
+  #         anomaly_type: detected_anomaly
+  #   - timestamp:
+  #         source: extracted_ts
+  #         format: RFC3339 # Matches "2026-03-05T08:15:00Z"
+  #   - labels:
+  #       anomaly_type:
+
+# - job_name: prometheus-metrics
+#   static_configs:
+#     - targets:
+#         - localhost
+#       labels:
+#         job: prometheus-metrics
+#         __path__: /var/log/log-examples/prometheus_metrics.csv
+# - job_name: windows-os-metrics
+#   static_configs:
+#     - targets:
+#         - localhost
+#       labels:
+#         job: windows-os-metrics
+#         __path__: /var/log/log-examples/windows_os_metrics.csv

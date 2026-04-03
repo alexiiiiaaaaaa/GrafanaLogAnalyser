@@ -1,0 +1,88 @@
+Instructions to make sure all logs are processed: 
+
+How files are processed: 
+atm-parser-rust -> atm-parser-py <- promtail -> loki -> grafana
+
+Step 1 
+atm-parser-rust container 
+ - it executes the rust parser which  
+ - saves parsed data to sql db which can be found: /app/sqlite    
+ OR 
+  - the same DB files are mounted under Volumes > grafanadeploy7v_sqlite
+
+Step 2
+atm-parser-py container: 
+ - executes our python: app.py
+ - generates /app/output/anomalies.jsonl file 
+ OR
+ - the same anomalies.json file is mounted under Volumes > grafanadeploy7v_anomalies
+   
+Step 3
+promtail container:  
+description: promtail is getting log files, process them and transfer to loki
+ - promtail takes anomalies.json 
+  (promtail uses job_name: anomalies-from-app-py from  app_configs/promtail-config.yaml)
+ - and process it following rules from it's anomalies-from-app-py job, the job mainly process timestamps, 
+ so we can have  in grafana a real timestamps from the log file (not timestamps of actual upload to grafana)
+ - promtail sends processed logs to loki via url: http://loki:3100/loki/api/v1/push
+ 
+Step 4   
+loki container: 
+loki is a storage DB for pre-processed logs.
+
+Step 5
+grafana container: 
+Grafana is the leading open source visualization and dashboarding platform that allows you to query, 
+visualize, alert on, and understand your data no matter where it’s stored.
+
+grafana reads data from loki via url: http://loki:3100  
+
+Note: I also started to configure telegraf -> influxdb -> grafana for csv metrics processing  
+
+Troubleshooting: 
+   
+In docker desktop: 
+'atm-parser-py' container
+1) click on 'atm-parser-py' container
+2) click on Exec tab
+3) run command: cat /app/output/anomalies.jsonl and check if there are any json logs
+4) restart 'atm-parser-py' container
+
+promtail container
+5) restart promtail container
+loki container
+6) restart loki container  
+
+
+# Source - https://stackoverflow.com/a/54219039
+# Posted by Slipstream, modified by community. See post 'Timeline' for change history
+# Retrieved 2026-04-01, License - CC BY-SA 4.0
+
+# Stop services only
+docker compose stop
+
+# Stop and remove containers, networks..
+docker compose down 
+
+# Down and remove volumes
+docker compose down --volumes 
+
+# Down and remove images
+docker compose down --rmi <all|local> 
+
+
+---------------
+https://docs.docker.com/reference/cli/docker/compose/up/
+differences among various docker-compose command options:
+
+docker compose up - Start and restart all the services defined in docker-compose.yml
+
+docker compose up --no-start  - Don't start the services after creating them
+
+docker compose down - Command will stop running containers, but it also removes the stopped containers as well as any networks that were created. You can take down one step further and add the -v flag to remove all volumes too. This is great for doing a full blown reset on your environment by running docker-compose down -v.
+
+docker compose start - Command will only restart containers stopped previously
+
+docker compose restart - Command will restart all stopped and running containers
+
+docker compose stop - Command will stop running containers but won’t remove them

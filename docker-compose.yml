@@ -1,0 +1,127 @@
+services:
+  promtail:
+    image: grafana/promtail:latest
+    container_name: promtail
+    ports:
+      - "9080:9080"
+    volumes:
+      - ./app_configs/promtail-config.yaml:/etc/promtail/config.yml
+      - ./data:/var/log/log-examples
+      - anomalies:/logs/anomalies
+    command: -config.file=/etc/promtail/config.yml
+    privileged: true
+
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./app_configs/loki-config.yaml:/etc/loki/local-config.yaml
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - influxdb
+      - loki
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=pw
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      # disables force password change
+      - GF_SECURITY_DISABLE_INITIAL_ADMIN_CREATION=false
+      - GF_USERS_DEFAULT_THEME=dark
+      # Disable password change requirement
+      - GF_USERS_AUTO_ASSIGN_ORG=true
+      - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Admin
+      - GF_SERVER_ENABLE_GZIP=true
+      - GF_INSTALL_PLUGINS=
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+
+  telegraf:
+    image: telegraf:latest
+    container_name: telegraf
+    environment:
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_DB: metrics
+      INFLUXDB_USER: telegraf
+      INFLUXDB_PASSWORD: telegrafpass
+    volumes:
+      - ./app_configs/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+#      - ./Assets/Synthetic-Data/24h-Data-Set:/logs:ro # Mount the folder where your metrics log is stored
+      - ./data:/logs
+      - anomalies:/logs/anomalies
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    restart: always
+
+  influxdb:
+    image: influxdb:1.8
+    container_name: influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      INFLUXDB_DB: metrics
+      INFLUXDB_ADMIN_USER: admin
+      INFLUXDB_ADMIN_PASSWORD: adminpass
+      INFLUXDB_USER: telegraf
+      INFLUXDB_USER_PASSWORD: telegrafpass
+    healthcheck:
+      test: ["CMD", "influx", "-execute", "SHOW DATABASES"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    volumes:
+      - influxdb-data:/var/lib/influxdb
+    restart: always
+
+  atm-parser-rust:
+    build:
+      context: ./parser/industrialteamproject_group8/parser
+      dockerfile: Dockerfile
+    container_name: atm-parser-rust
+    volumes:
+      - sqlite:/app/sqlite          # Persist database shared between py and rust services
+      - ./data:/app/data
+      - anomalies:/app/output/
+    environment:
+      - DATABASE_URL=sqlite:///app/data/app.db
+      - RUST_LOG=debug             # Optional: logging level
+    restart: unless-stopped
+
+  atm-parser-py:
+    build:
+      context: ./parser/industrialteamproject_group8
+      dockerfile: Dockerfile
+    container_name: atm-parser-py
+#    command: tail -f /dev/null
+    depends_on:
+      - atm-parser-rust
+    volumes:
+      - sqlite:/app/sqlite          # Persist database shared between py and rust services
+      - anomalies:/app/output/
+      - ./parser/industrialteamproject_group8:/debug
+    ports:
+      - "5678:5678"  # Debug port
+    environment:
+      - RUST_LOG=debug
+      - PYTHONUNBUFFERED=1           # Disable output buffering
+      - PYTHONDONTWRITEBYTECODE=1    # Don't create .pyc files
+      - PYTHONFAULTHANDLER=1         # Dump traceback on segfault
+      - PYTHONASYNCIODEBUG=1         # Enable asyncio debug mode (if using async)
+#    restart: unless-stopped
+
+volumes:
+  grafana-data:
+  influxdb-data:
+  sqlite:
+  anomalies:
