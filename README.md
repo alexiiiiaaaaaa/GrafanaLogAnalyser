@@ -49,9 +49,21 @@
     └── demo.log
 13 directories, 34 files
 ```
+#### Enviroment setup:
+```shell  
+1) Install Docker desktop from:
+Windows: https://docs.docker.com/desktop/setup/install/windows-install/ 
+Mac: https://docs.docker.com/desktop/setup/install/mac-install/
+Linux: https://docs.docker.com/desktop/setup/install/linux/
+
+2) Navigate to project directory 
+
+3) run command:
+docker compose up
+```
 
 #### Usefull commands:
-```shell                                                                                                                             main ✚ ●  20:39:54 
+```shell                                                                                             
 docker-compose down
 
 # Remove ALL volumes (including InfluxDB if you want fresh data)
